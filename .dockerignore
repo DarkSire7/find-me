@@ -10,5 +10,4 @@ venv/
 .gitignore
 .vscode
 .idea
-Dockerfile
-requirements.txt
+
