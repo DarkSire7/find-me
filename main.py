@@ -144,8 +144,8 @@ WEIGHTS = {
 }
 
 # Threshold above which a face comparison is considered a match (Cosine Similarity)
-# ArcFace (buffalo_l) threshold is typically ~0.45 for cosine similarity.
-FACE_MATCH_THRESHOLD = 0.45
+# ArcFace (buffalo_l) threshold is typically ~0.35 - 0.45 for cosine similarity in wild conditions.
+FACE_MATCH_THRESHOLD = 0.35
 
 
 def jaro_winkler_score(a: Optional[str], b: Optional[str]) -> float:
@@ -377,9 +377,14 @@ def match_faces(payload: FaceMatchRequest) -> FaceMatchResponse:
     is_match = cos_sim >= FACE_MATCH_THRESHOLD
 
     # For ArcFace, cosine similarity of the same person across conditions 
-    # natively lands in 0.60–0.90+. Different people are usually < 0.20.
-    # Convert directly to percentage for an intuitive human-readable score.
-    similarity = max(0.0, min(100.0, cos_sim * 100.0))
+    # natively lands in 0.35–0.80+. Different people are usually < 0.10.
+    # We map this to a human-readable confidence score where the threshold = 80%
+    if cos_sim < 0:
+        similarity = 0.0
+    elif cos_sim < FACE_MATCH_THRESHOLD:
+        similarity = (cos_sim / FACE_MATCH_THRESHOLD) * 80.0
+    else:
+        similarity = 80.0 + ((cos_sim - FACE_MATCH_THRESHOLD) / (1.0 - FACE_MATCH_THRESHOLD)) * 20.0
 
     return FaceMatchResponse(
         is_match=is_match,
