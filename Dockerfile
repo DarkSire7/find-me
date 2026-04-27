@@ -9,7 +9,10 @@ ENV PORT 8080
 # Install system dependencies
 # opencv-python-headless might need glib for some underlying operations
 RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    python3-dev \
     libglib2.0-0 \
+    libgomp1 \
     && rm -rf /var/lib/apt/lists/*
 
 # Set the working directory in the container
