@@ -1,0 +1,10 @@
+fastapi==0.109.0
+uvicorn==0.27.0
+pydantic==2.5.3
+numpy==1.26.3
+rapidfuzz==3.6.1
+Pillow==10.2.0
+# ── Face recognition (upgraded to ArcFace via InsightFace) ────────────────
+insightface==0.7.3
+onnxruntime==1.17.1
+opencv-python-headless==4.9.0.80
