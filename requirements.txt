@@ -5,6 +5,7 @@ numpy==1.26.3
 rapidfuzz==3.6.1
 Pillow==10.2.0
 # ── Face recognition (upgraded to ArcFace via InsightFace) ────────────────
+albumentations==1.4.3
 insightface==0.7.3
 onnxruntime==1.17.1
 opencv-python-headless==4.9.0.80
