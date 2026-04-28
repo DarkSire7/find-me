@@ -9,3 +9,4 @@ albumentations==1.4.3
 insightface==0.7.3
 onnxruntime==1.17.1
 opencv-python-headless==4.9.0.80
+google-generativeai==0.3.2

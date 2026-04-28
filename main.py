@@ -22,6 +22,9 @@ from fastapi import FastAPI, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field, field_validator
 from rapidfuzz.distance import JaroWinkler
+import google.generativeai as genai
+import json
+import PIL.Image
 
 # ---------------------------------------------------------------------------
 # Logging
@@ -50,6 +53,11 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# ---------------------------------------------------------------------------
+# Gemini AI setup
+# ---------------------------------------------------------------------------
+genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
 
 # ---------------------------------------------------------------------------
 # Face recognition backend (optional — graceful fallback if unavailable)
@@ -129,6 +137,10 @@ class FaceMatchResponse(BaseModel):
     similarity_percentage: float = Field(..., ge=0.0, le=100.0)
     face_distance: Optional[float]
     backend: str
+
+
+class TagExtractionRequest(BaseModel):
+    image_url: str
 
 
 # ---------------------------------------------------------------------------
@@ -392,6 +404,51 @@ def match_faces(payload: FaceMatchRequest) -> FaceMatchResponse:
         face_distance=round(1.0 - cos_sim, 4), # For schema compatibility
         backend=FACE_BACKEND,
     )
+
+
+@app.post(
+    "/extract-tags",
+    tags=["Matching"],
+    summary="Automatically extract physical descriptors from a person's image using Gemini 1.5 Flash.",
+)
+async def extract_tags(payload: TagExtractionRequest) -> dict[str, list[str]]:
+    """
+    Downloads the image, passes it to Gemini 1.5 Flash to identify physical
+    characteristics like clothing, hair, and distinguishing features.
+    """
+    logger.info("extract/tags — url=%s", payload.image_url)
+
+    try:
+        # Reuse existing download utility
+        image_bytes = _download_image_bytes(payload.image_url)
+        img = PIL.Image.open(BytesIO(image_bytes))
+
+        # Initialize model
+        model = genai.GenerativeModel('gemini-1.5-flash')
+
+        # Precise prompt as requested
+        prompt = (
+            "Analyze this photo of a person. Extract their physical descriptors "
+            "(e.g., hair color, clothing, glasses, facial hair, approximate age). "
+            "Return a JSON object with a single key \"physical_tags\" containing a list of string descriptors. "
+            "Return ONLY valid JSON with no markdown formatting."
+        )
+
+        # Generate response
+        response = await model.generate_content_async([prompt, img])
+        
+        # Clean response text (sometimes models include backticks even when told not to)
+        text_response = response.text.strip()
+        if text_response.startswith("```"):
+            text_response = text_response.strip("`").replace("json", "", 1).strip()
+
+        parsed = json.loads(text_response)
+        return parsed
+
+    except Exception as exc:
+        logger.error(f"Gemini tag extraction failed for '{payload.image_url}': {exc}")
+        # Graceful fallback as requested
+        return {"physical_tags": []}
 
 
 # ---------------------------------------------------------------------------
