@@ -18,7 +18,8 @@ from io import BytesIO
 from typing import Any, Optional
 
 import numpy as np
-from fastapi import FastAPI, HTTPException, status
+from fastapi import FastAPI, HTTPException, status, Request
+from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field, field_validator
 from rapidfuzz.distance import JaroWinkler
@@ -62,6 +63,37 @@ if GEMINI_API_KEY:
 else:
     logger.warning("GEMINI_API_KEY not found in environment variables. AI tagging will fail.")
     gemini_model = None
+
+# ---------------------------------------------------------------------------
+# Global Error Handling & CORS Enforcement
+# ---------------------------------------------------------------------------
+
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    """Ensures even hard crashes return JSON + CORS headers."""
+    logger.error(f"Unhandled Exception: {exc}", exc_info=True)
+    return JSONResponse(
+        status_code=500,
+        content={
+            "error": "INTERNAL_SERVER_ERROR",
+            "message": "The server encountered an error processing your request.",
+            "detail": str(exc) if os.getenv("DEBUG") == "true" else "Check server logs."
+        },
+        headers={
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Methods": "*",
+            "Access-Control-Allow-Headers": "*"
+        }
+    )
+
+@app.middleware("http")
+async def force_cors_middleware(request: Request, call_next):
+    """Supplementary middleware to ensure headers are present on every response."""
+    response = await call_next(request)
+    response.headers["Access-Control-Allow-Origin"] = "*"
+    response.headers["Access-Control-Allow-Methods"] = "*"
+    response.headers["Access-Control-Allow-Headers"] = "*"
+    return response
 
 # ---------------------------------------------------------------------------
 # Face recognition backend (optional — graceful fallback if unavailable)
