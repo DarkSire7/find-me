@@ -446,9 +446,10 @@ async def extract_tags(payload: TagExtractionRequest) -> dict[str, list[str]]:
         return parsed
 
     except Exception as exc:
-        logger.error(f"Gemini tag extraction failed for '{payload.image_url}': {exc}")
-        # Graceful fallback as requested
-        return {"physical_tags": []}
+        error_msg = f"Gemini tag extraction failed for '{payload.image_url}': {str(exc)}"
+        logger.error(error_msg)
+        # Return error details in the response temporarily to help the USER debug
+        return {"physical_tags": [], "error": str(exc)}
 
 
 # ---------------------------------------------------------------------------
