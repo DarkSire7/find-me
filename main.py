@@ -60,6 +60,7 @@ GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 if GEMINI_API_KEY:
     genai.configure(api_key=GEMINI_API_KEY)
     gemini_model = genai.GenerativeModel('gemini-1.5-flash')
+    logger.info(f"Gemini AI configured (Model: gemini-1.5-flash, Version: {genai.__version__})")
 else:
     logger.warning("GEMINI_API_KEY not found in environment variables. AI tagging will fail.")
     gemini_model = None
