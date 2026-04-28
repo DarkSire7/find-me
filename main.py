@@ -179,6 +179,12 @@ class TagExtractionRequest(BaseModel):
     image_url: str
 
 
+class TagExtractionResponse(BaseModel):
+    physical_tags: list[str] = Field(default_factory=list)
+    error: Optional[str] = None
+    warning: Optional[str] = None
+
+
 # ---------------------------------------------------------------------------
 # Core Algorithms
 # ---------------------------------------------------------------------------
@@ -445,10 +451,11 @@ def match_faces(payload: FaceMatchRequest) -> FaceMatchResponse:
 
 @app.post(
     "/extract-tags",
+    response_model=TagExtractionResponse,
     tags=["Matching"],
     summary="Automatically extract physical descriptors from a person's image using Gemini 1.5 Flash.",
 )
-async def extract_tags(payload: TagExtractionRequest) -> dict[str, list[str]]:
+async def extract_tags(payload: TagExtractionRequest) -> TagExtractionResponse:
     """
     Downloads the image, passes it to Gemini 1.5 Flash to identify physical
     characteristics like clothing, hair, and distinguishing features.
@@ -489,12 +496,12 @@ async def extract_tags(payload: TagExtractionRequest) -> dict[str, list[str]]:
                 text_response = text_response[4:].strip()
 
         parsed = json.loads(text_response)
-        return parsed
+        return TagExtractionResponse(physical_tags=parsed.get("physical_tags", []))
 
     except Exception as exc:
         error_msg = str(exc)
         logger.error(f"Gemini tag extraction failed: {error_msg}")
-        return {"physical_tags": [], "error": error_msg}
+        return TagExtractionResponse(physical_tags=[], error=error_msg)
 
 
 # ---------------------------------------------------------------------------
