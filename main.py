@@ -482,13 +482,23 @@ async def extract_tags(payload: TagExtractionRequest) -> TagExtractionResponse:
         )
 
         # Generate response
-        response = await gemini_model.generate_content_async([prompt, img])
+        response = await gemini_model.generate_content_async(
+            [prompt, img],
+            safety_settings=[
+                {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
+                {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_NONE"},
+                {"category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "BLOCK_NONE"},
+                {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_NONE"},
+            ]
+        )
         
         # Clean response text
-        if not response or not response.text:
-             return {"physical_tags": [], "warning": "AI returned an empty response."}
+        if not response or not hasattr(response, 'text') or not response.text:
+             logger.warning(f"AI returned an empty or blocked response. Prompt feedback: {response.prompt_feedback if hasattr(response, 'prompt_feedback') else 'N/A'}")
+             return TagExtractionResponse(physical_tags=[], warning="AI returned an empty response. This may be due to safety filters.")
 
         text_response = response.text.strip()
+        logger.info(f"Raw Gemini response: {text_response}")
         # Remove markdown code blocks if present
         if text_response.startswith("```"):
             text_response = text_response.split("```")[1]
