@@ -50,18 +50,18 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
     allow_credentials=False,
-    allow_methods=["GET", "POST", "OPTIONS"],
+    allow_methods=["*"],
     allow_headers=["*"],
 )
 
-@app.options("/{rest_of_path:path}")
-async def preflight_handler(rest_of_path: str):
-    return {}
-
-# ---------------------------------------------------------------------------
 # Gemini AI setup
-# ---------------------------------------------------------------------------
-genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+if GEMINI_API_KEY:
+    genai.configure(api_key=GEMINI_API_KEY)
+    gemini_model = genai.GenerativeModel('gemini-1.5-flash')
+else:
+    logger.warning("GEMINI_API_KEY not found in environment variables. AI tagging will fail.")
+    gemini_model = None
 
 # ---------------------------------------------------------------------------
 # Face recognition backend (optional — graceful fallback if unavailable)
@@ -305,6 +305,7 @@ def health_check() -> dict[str, Any]:
         "service": "DisasterIQ ML Engine",
         "status": "healthy",
         "face_backend": FACE_BACKEND,
+        "gemini_configured": gemini_model is not None,
         "weights": WEIGHTS,
     }
 
@@ -420,6 +421,12 @@ async def extract_tags(payload: TagExtractionRequest) -> dict[str, list[str]]:
     Downloads the image, passes it to Gemini 1.5 Flash to identify physical
     characteristics like clothing, hair, and distinguishing features.
     """
+    if gemini_model is None:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Gemini AI is not configured (missing API key)."
+        )
+
     logger.info("extract/tags — url=%s", payload.image_url)
 
     try:
@@ -427,33 +434,35 @@ async def extract_tags(payload: TagExtractionRequest) -> dict[str, list[str]]:
         image_bytes = _download_image_bytes(payload.image_url)
         img = PIL.Image.open(BytesIO(image_bytes))
 
-        # Initialize model
-        model = genai.GenerativeModel('gemini-1.5-flash')
-
-        # Precise prompt as requested
+        # Precise prompt
         prompt = (
             "Analyze this photo of a person. Extract their physical descriptors "
             "(e.g., hair color, clothing, glasses, facial hair, approximate age). "
             "Return a JSON object with a single key \"physical_tags\" containing a list of string descriptors. "
-            "Return ONLY valid JSON with no markdown formatting."
+            "Return ONLY valid JSON with no markdown formatting or explanation."
         )
 
         # Generate response
-        response = await model.generate_content_async([prompt, img])
+        response = await gemini_model.generate_content_async([prompt, img])
         
-        # Clean response text (sometimes models include backticks even when told not to)
+        # Clean response text
+        if not response or not response.text:
+             return {"physical_tags": [], "warning": "AI returned an empty response."}
+
         text_response = response.text.strip()
+        # Remove markdown code blocks if present
         if text_response.startswith("```"):
-            text_response = text_response.strip("`").replace("json", "", 1).strip()
+            text_response = text_response.split("```")[1]
+            if text_response.startswith("json"):
+                text_response = text_response[4:].strip()
 
         parsed = json.loads(text_response)
         return parsed
 
     except Exception as exc:
-        error_msg = f"Gemini tag extraction failed for '{payload.image_url}': {str(exc)}"
-        logger.error(error_msg)
-        # Return error details in the response temporarily to help the USER debug
-        return {"physical_tags": [], "error": str(exc)}
+        error_msg = str(exc)
+        logger.error(f"Gemini tag extraction failed: {error_msg}")
+        return {"physical_tags": [], "error": error_msg}
 
 
 # ---------------------------------------------------------------------------
