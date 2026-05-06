@@ -47,13 +47,35 @@ app = FastAPI(
     redoc_url="/redoc",
 )
 
+# Robust CORS setup
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
     allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["*"],
 )
+
+# Standard health checks
+@app.get("/", tags=["Health"])
+@app.get("/health", tags=["Health"])
+@app.get("/healthz", tags=["Health"])
+def health_check():
+    return {"status": "ok", "service": "DisasterIQ ML Engine"}
+
+# Explicit OPTIONS handler for preflights (Brute Force Fix)
+@app.options("/{rest_of_path:path}")
+async def preflight_handler(rest_of_path: str):
+    return JSONResponse(
+        content="OK",
+        headers={
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Methods": "POST, GET, OPTIONS, DELETE, PUT",
+            "Access-Control-Allow-Headers": "*",
+            "Access-Control-Max-Age": "3600",
+        },
+    )
 
 # Gemini AI setup
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
