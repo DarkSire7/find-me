@@ -69,8 +69,8 @@ app.add_middleware(
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 if GEMINI_API_KEY:
     genai.configure(api_key=GEMINI_API_KEY)
-    gemini_model = genai.GenerativeModel("gemini-1.5-flash")
-    logger.info("Gemini AI configured (Model: gemini-1.5-flash)")
+    gemini_model = genai.GenerativeModel("gemini-2.0-flash")
+    logger.info("Gemini AI configured (Model: gemini-2.0-flash)")
 else:
     logger.warning("GEMINI_API_KEY not set — AI tagging endpoint will return 503.")
     gemini_model = None
